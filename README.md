@@ -17,8 +17,8 @@ El archivo Clientes.cpp genera 3 archivos:
 
 Para importar estos archivos a MongoDB, se recomienda usar: 
 
-mongoimport -d Banco -c clientes --jsonArray clientes.json
+    mongoimport -d Banco -c clientes --jsonArray clientes.json
 
-mongoimport -d Banco -c cuentas --jsonArray cuentas.json
+    mongoimport -d Banco -c cuentas --jsonArray cuentas.json
 
-mongoimport -d Banco -c transferencias --jsonArray transferencias.json
+    mongoimport -d Banco -c transferencias --jsonArray transferencias.json
