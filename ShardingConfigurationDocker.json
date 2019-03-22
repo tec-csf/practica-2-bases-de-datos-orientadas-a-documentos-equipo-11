@@ -1,0 +1,110 @@
+# Crear una red para el Sharding
+
+docker network create sharding-network
+
+# Crear tres contenedores para los nodos del Config Replica Set
+
+docker run --name mongo-config1 -d --net sharding-network mongo --replSet "rsConfig" --configsvr
+docker run --name mongo-config2 -d --net sharding-network mongo --replSet "rsConfig" --configsvr
+docker run --name mongo-config3 -d --net sharding-network mongo --replSet "rsConfig" --configsvr
+
+# Iniciar una terminal en uno de los nodos
+
+docker exec -it mongo-config1 mongo --host mongo-config1 --port 27019
+
+# Inicializar el Config Replica Set
+
+config = {
+      "_id" : "rsConfig",
+      "configsvr": true,
+      "members" : [
+          {
+              "_id" : 0,
+              "host" : "mongo-config1:27019"
+          },
+          {
+              "_id" : 1,
+              "host" : "mongo-config2:27019"
+          },
+          {
+              "_id" : 2,
+              "host" : "mongo-config3:27019"
+          }
+      ]
+  }
+
+rs.initiate(config)
+
+# Desconectarse del nodo
+
+exit  # Para salir de mongo shell
+exit  # Para salir del contenedor
+
+# Crear tres contenedores para los nodos del Shard Replica Set
+
+docker run --name ONE -d --net sharding-network -p 27018:27018 mongo --replSet "rsShard" --shardsvr
+docker run --name TWO -d --net sharding-network  mongo --replSet "rsShard" --shardsvr
+docker run --name THREE -d --net sharding-network  mongo --replSet "rsShard" --shardsvr
+
+# Iniciar una terminal en uno de los nodos
+
+docker exec -it ONE mongo --host ONE --port 27018
+
+# Inicializar el Shard Replica Set
+
+config = {
+      "_id" : "rsShard",
+      "members" : [
+          {
+              "_id" : 0,
+              "host" : "ONE:27018"
+          },
+          {
+              "_id" : 1,
+              "host" : "TWO:27018"
+          },
+          {
+              "_id" : 2,
+              "host" : "THREE:27018"
+          }
+      ]
+  }
+
+rs.initiate(config)
+
+# Desconectarse del nodo
+
+exit  # Para salir de mongo shell
+exit  # Para salir del contenedor
+
+# Iniciar el router
+
+docker run  --name mongo-router -d --net sharding-network mongo  mongos --configdb rsConfig/mongo-config1:27019,mongo-config2:27019,mongo-config3:27019
+
+# Conectarse al router
+
+docker exec -it mongo-router mongo
+
+# Adicionar Shards al clúster
+
+sh.addShard( "rsShard/ONE:27017")
+
+# Habilitar sharding para la base de datos
+
+sh.enableSharding("Banco")
+
+# Habilitar sharding en las colecciones
+
+sh.shardCollection("Banco.clientes",  { "Cuenta" : 1 } )
+sh.shardCollection("Banco.cuentas",  { "Cuenta" : 1 } )
+sh.shardCollection("Banco.transferencias",  { "Cuenta" : 1 } )
+
+# Insertar los datos a la base
+
+docker cp <Ruta al archivo>clientes.json ONE:/tmp/clientes.json
+docker cp <Ruta al archivo>cuentas.json ONE:/tmp/cuentas.json
+docker cp <Ruta al archivo>transferencias.json ONE:/tmp/transferencias.json
+
+docker exec -it ONE mongoimport -d Banco -c clientes --port 27018 --jsonArray /tmp/clientes.json
+docker exec -it ONE mongoimport -d Banco -c cuentas --port 27018 --jsonArray /tmp/cuentas.json
+docker exec -it ONE mongoimport -d Banco -c transferencias --port 27018 --jsonArray /tmp/transferencias.json
